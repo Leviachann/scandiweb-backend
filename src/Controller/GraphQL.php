@@ -3,62 +3,117 @@
 namespace App\Controller;
 
 use GraphQL\GraphQL as GraphQLBase;
-use GraphQL\Type\Definition\ObjectType;
-use GraphQL\Type\Definition\Type;
 use GraphQL\Type\Schema;
 use GraphQL\Type\SchemaConfig;
+use GraphQL\Type\Definition\ObjectType;
+use GraphQL\Type\Definition\Type;
+use GraphQL\Type\Definition\InputObjectType;
+use App\GraphQL\Types\CategoryType;
+use App\GraphQL\Types\ProductType;
+use App\GraphQL\Resolvers\CategoryResolver;
+use App\GraphQL\Resolvers\ProductResolver;
+use App\GraphQL\Resolvers\OrderResolver;
+use App\GraphQL\TypeRegistry;
 use RuntimeException;
 use Throwable;
 
-class GraphQL {
-    static public function handle() {
+class GraphQL
+{
+    public static function handle(): string
+    {
         try {
+            $categoryResolver = new CategoryResolver();
+            $productResolver = new ProductResolver();
+            $orderResolver = new OrderResolver();
+
+            $categoryType = TypeRegistry::get(CategoryType::class);
+            $productType = TypeRegistry::get(ProductType::class);
+
             $queryType = new ObjectType([
                 'name' => 'Query',
                 'fields' => [
-                    'echo' => [
-                        'type' => Type::string(),
+                    'categories' => [
+                        'type' => Type::listOf($categoryType),
+                        'resolve' => fn() => $categoryResolver->getAll()
+                    ],
+                    'category' => [
+                        'type' => $categoryType,
                         'args' => [
-                            'message' => ['type' => Type::string()],
+                            'name' => Type::string()
                         ],
-                        'resolve' => static fn ($rootValue, array $args): string => $rootValue['prefix'] . $args['message'],
+                        'resolve' => fn($root, $args) =>
+                            $categoryResolver->getByName($args['name'])
+                    ],
+                    'products' => [
+                        'type' => Type::listOf($productType),
+                        'resolve' => fn() => $productResolver->getAll()
+                    ],
+                    'product' => [
+                        'type' => $productType,
+                        'args' => [
+                            'id' => Type::string()
+                        ],
+                        'resolve' => fn($root, $args) =>
+                            $productResolver->getById($args['id'])
+                    ],
+                    'productsByCategory' => [
+                        'type' => Type::listOf($productType),
+                        'args' => [
+                            'categoryId' => Type::int()
+                        ],
+                        'resolve' => fn($root, $args) =>
+                            $productResolver->getByCategoryId($args['categoryId'])
                     ],
                 ],
             ]);
-        
+
+            $orderItemInputType = new InputObjectType([
+                'name' => 'OrderItemInput',
+                'fields' => [
+                    'productId' => Type::nonNull(Type::string()),
+                    'quantity' => Type::nonNull(Type::int()),
+                    'selectedAttributes' => Type::string(),
+                ],
+            ]);
+
             $mutationType = new ObjectType([
                 'name' => 'Mutation',
                 'fields' => [
-                    'sum' => [
+                    'createOrder' => [
                         'type' => Type::int(),
                         'args' => [
-                            'x' => ['type' => Type::int()],
-                            'y' => ['type' => Type::int()],
+                            'items' => Type::nonNull(
+                                Type::listOf($orderItemInputType)
+                            ),
                         ],
-                        'resolve' => static fn ($calc, array $args): int => $args['x'] + $args['y'],
+                        'resolve' => fn($root, $args) =>
+                            $orderResolver->createOrder($args['items'])
                     ],
                 ],
             ]);
-        
-            // See docs on schema options:
-            // https://webonyx.github.io/graphql-php/schema-definition/#configuration-options
+
             $schema = new Schema(
                 (new SchemaConfig())
-                ->setQuery($queryType)
-                ->setMutation($mutationType)
+                    ->setQuery($queryType)
+                    ->setMutation($mutationType)
             );
-        
+
             $rawInput = file_get_contents('php://input');
             if ($rawInput === false) {
                 throw new RuntimeException('Failed to get php://input');
             }
-        
+
             $input = json_decode($rawInput, true);
             $query = $input['query'];
             $variableValues = $input['variables'] ?? null;
-        
-            $rootValue = ['prefix' => 'You said: '];
-            $result = GraphQLBase::executeQuery($schema, $query, $rootValue, null, $variableValues);
+
+            $result = GraphQLBase::executeQuery(
+                $schema,
+                $query,
+                null,
+                null,
+                $variableValues
+            );
             $output = $result->toArray();
         } catch (Throwable $e) {
             $output = [
