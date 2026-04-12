@@ -1,8 +1,9 @@
 {
     frankenphp
+    admin off
 }
 
-:8000 {
+:{$PORT} {
     root * /app/public
     php_server
 }
