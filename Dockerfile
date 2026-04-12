@@ -10,3 +10,7 @@ RUN install-php-extensions \
 COPY . /app
 
 WORKDIR /app
+
+ENV PORT=8000
+
+CMD ["frankenphp", "run", "--config", "/app/Caddyfile"]
