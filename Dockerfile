@@ -1,16 +1,16 @@
-FROM dunglas/frankenphp
+FROM php:8.2-apache
 
-RUN install-php-extensions \
-    pdo_mysql \
-    mysqli \
-    mbstring \
-    openssl \
-    zip
+RUN docker-php-ext-install pdo pdo_mysql mysqli mbstring
 
-WORKDIR /app
+RUN a2enmod rewrite
 
-COPY . .
+COPY . /var/www/html/
 
-EXPOSE 8000
+RUN echo '<Directory /var/www/html>\n\
+    AllowOverride All\n\
+    Require all granted\n\
+</Directory>' >> /etc/apache2/apache2.conf
 
-CMD ["frankenphp", "run", "--config", "/app/Caddyfile"]
+EXPOSE 80
+
+CMD ["apache2-foreground"]
