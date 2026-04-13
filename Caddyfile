@@ -1,9 +1,9 @@
 {
-    frankenphp
-    admin off
+	admin off
+	frankenphp
 }
 
 :{$PORT} {
-    root * /app/public
-    php_server
+	root * /app/public
+	php_server
 }
